@@ -329,11 +329,7 @@ class QWenAttention(nn.Module):
             key = torch.cat((past_key, key), dim=1)
             value = torch.cat((past_value, value), dim=1)
 
-        if use_cache:
-            present = (key, value)
-        else:
-            present = None
-
+        present = (key, value) if use_cache else None
         if self.use_logn_attn and not self.training:
             if self.logn_tensor.device != query.device or self.logn_tensor.dtype != query.dtype:
                 self.logn_tensor = self.logn_tensor.to(query.device).type_as(query)
@@ -376,8 +372,7 @@ class QWenMLP(nn.Module):
         a1 = self.w1(hidden_states)
         a2 = self.w2(hidden_states)
         intermediate_parallel = a1 * F.silu(a2)
-        output = self.c_proj(intermediate_parallel)
-        return output
+        return self.c_proj(intermediate_parallel)
 
 
 class QWenBlock(nn.Module):
@@ -432,12 +427,11 @@ class QWenBlock(nn.Module):
         mlp_output = self.mlp(layernorm_output)
         hidden_states = residual + mlp_output
 
-        if use_cache:
-            outputs = (hidden_states,) + outputs
-        else:
-            outputs = (hidden_states,) + outputs[1:]
-
-        return outputs
+        return (
+            (hidden_states,) + outputs
+            if use_cache
+            else (hidden_states,) + outputs[1:]
+        )
 
 
 class QWenPreTrainedModel(PreTrainedModel):
@@ -497,7 +491,7 @@ class QWenModel(QWenPreTrainedModel):
                 QWenBlock(
                     config,
                 )
-                for i in range(config.num_hidden_layers)
+                for _ in range(config.num_hidden_layers)
             ]
         )
         self.ln_f = RMSNorm(
@@ -1093,8 +1087,7 @@ def apply_rotary_pos_emb(t, freqs):
         freqs = freqs.squeeze(0).squeeze(1)
         cos = freqs[:, : freqs.shape[-1] // 2].cos()
         sin = freqs[:, : freqs.shape[-1] // 2].sin()
-        output = apply_rotary_emb_func(t_, cos, sin).type_as(t)
-        return output
+        return apply_rotary_emb_func(t_, cos, sin).type_as(t)
     else:
         rot_dim = freqs.shape[-1]
         t_, t_pass_ = t[..., :rot_dim], t[..., rot_dim:]
@@ -1116,6 +1109,5 @@ class RMSNorm(torch.nn.Module):
     def forward(self, x):
         if rms_norm is not None and x.is_cuda:
             return rms_norm(x, self.weight, self.eps)
-        else:
-            output = self._norm(x.float()).type_as(x)
-            return output * self.weight
+        output = self._norm(x.float()).type_as(x)
+        return output * self.weight

@@ -226,10 +226,15 @@ def get_peft_state_non_lora_maybe_zero_3(named_params, require_grad_only=True):
 
 def find_all_linear_names(model):
     cls = torch.nn.Linear
-    lora_module_names = set()
-    for name, module in model.named_modules():
-        if isinstance(module, cls) and 'vision_model' not in name and 'mm_projector' not in name and 'vision_encoder' not in name and 'conv_final' not in name and'lm_head' not in name:
-            lora_module_names.add(name)
-
+    lora_module_names = {
+        name
+        for name, module in model.named_modules()
+        if isinstance(module, cls)
+        and 'vision_model' not in name
+        and 'mm_projector' not in name
+        and 'vision_encoder' not in name
+        and 'conv_final' not in name
+        and 'lm_head' not in name
+    }
     print(lora_module_names)
     return list(lora_module_names)

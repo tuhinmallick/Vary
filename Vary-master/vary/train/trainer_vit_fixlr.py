@@ -16,10 +16,7 @@ def unwrap_model(model: nn.Module) -> nn.Module:
         model (`torch.nn.Module`): The model to unwrap.
     """
     # since there could be multiple levels of wrapping, unwrap recursively
-    if hasattr(model, "module"):
-        return unwrap_model(model.module)
-    else:
-        return model
+    return unwrap_model(model.module) if hasattr(model, "module") else model
 
 
 class varyTrainer(Trainer):
@@ -45,12 +42,12 @@ class varyTrainer(Trainer):
                 model_to_save = unwrap_model(self.model)
                 _state_dict = model_to_save.state_dict()
 
-            weight_to_save = {}
             keys_to_match = ['mm_projector', 'embed_tokens', 'embed_in']
-            for k, v in _state_dict.items():
-                if any(key_match in k for key_match in keys_to_match):
-                    weight_to_save[k] = v
-
+            weight_to_save = {
+                k: v
+                for k, v in _state_dict.items()
+                if any(key_match in k for key_match in keys_to_match)
+            }
             current_folder = output_dir.split('/')[-1]
             parent_folder = os.path.dirname(output_dir)
             if current_folder.startswith('checkpoint-'):
@@ -58,7 +55,7 @@ class varyTrainer(Trainer):
                 os.makedirs(mm_projector_folder, exist_ok=True)
                 torch.save(weight_to_save, os.path.join(mm_projector_folder, f'{current_folder}.bin'))
             else:
-                torch.save(weight_to_save, os.path.join(output_dir, f'mm_projector.bin'))
+                torch.save(weight_to_save, os.path.join(output_dir, 'mm_projector.bin'))
 
         super(varyTrainer, self)._save(output_dir, state_dict)
 

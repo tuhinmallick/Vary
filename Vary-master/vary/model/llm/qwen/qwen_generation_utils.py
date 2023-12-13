@@ -43,10 +43,7 @@ def get_ltor_masks_and_position_ids(
     micro_batch_size, seq_length = data.size()
 
     # Attention mask (lower triangular).
-    if reset_attention_mask:
-        att_mask_batch = micro_batch_size
-    else:
-        att_mask_batch = 1
+    att_mask_batch = micro_batch_size if reset_attention_mask else 1
     attention_mask = torch.tril(
         torch.ones((att_mask_batch, seq_length, seq_length), device=data.device)
     ).view(att_mask_batch, 1, seq_length, seq_length)
@@ -171,7 +168,7 @@ def make_context(
                 break
 
         context_tokens = system_tokens + context_tokens
-        raw_text = f"{im_start}{system_text}{im_end}" + raw_text
+        raw_text = f"{im_start}{system_text}{im_end}{raw_text}"
         context_tokens += (
             nl_tokens
             + im_start_tokens
@@ -240,7 +237,7 @@ def _decode_chatml(
 ):
     end_reason = f"Gen length {len(tokens)}"
     eod_token_idx = context_length
-    for eod_token_idx in range(context_length, len(tokens)):
+    for eod_token_idx in range(eod_token_idx, len(tokens)):
         if tokens[eod_token_idx] in eod_token_ids:
             end_reason = f"Gen {tokenizer.decode([tokens[eod_token_idx]])!r}"
             break
@@ -345,9 +342,7 @@ class StopWordsLogitsProcessor(LogitsProcessor):
         for stop_token_seq in self.stop_words_ids:
             assert (
                 len(stop_token_seq) > 0
-            ), "Stop words token sequences {} cannot have an empty list".format(
-                stop_words_ids
-            )
+            ), f"Stop words token sequences {stop_words_ids} cannot have an empty list"
 
     def __call__(
         self, input_ids: torch.LongTensor, scores: torch.FloatTensor
@@ -359,7 +354,7 @@ class StopWordsLogitsProcessor(LogitsProcessor):
         return scores
 
     def _tokens_match(self, prev_tokens: torch.LongTensor, tokens: List[int]) -> bool:
-        if len(tokens) == 0:
+        if not tokens:
             # if bad word tokens is just one token always ban it
             return True
         elif len(tokens) > len(prev_tokens):
@@ -374,12 +369,10 @@ class StopWordsLogitsProcessor(LogitsProcessor):
     def _calc_stopped_samples(self, prev_input_ids: Iterable[int]) -> Iterable[int]:
         stopped_samples = []
         for prev_input_ids_slice in prev_input_ids:
-            match = False
-            for stop_token_seq in self.stop_words_ids:
-                if self._tokens_match(prev_input_ids_slice, stop_token_seq):
-                    # if tokens do not match continue
-                    match = True
-                    break
+            match = any(
+                self._tokens_match(prev_input_ids_slice, stop_token_seq)
+                for stop_token_seq in self.stop_words_ids
+            )
             stopped_samples.append(match)
 
         return stopped_samples

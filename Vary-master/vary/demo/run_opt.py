@@ -30,12 +30,12 @@ DEFAULT_IM_END_TOKEN = '</img>'
 
 
 def load_image(image_file):
-    if image_file.startswith('http') or image_file.startswith('https'):
-        response = requests.get(image_file)
-        image = Image.open(BytesIO(response.content)).convert('RGB')
-    else:
-        image = Image.open(image_file).convert('RGB')
-    return image
+    if not image_file.startswith('http') and not image_file.startswith(
+        'https'
+    ):
+        return Image.open(image_file).convert('RGB')
+    response = requests.get(image_file)
+    return Image.open(BytesIO(response.content)).convert('RGB')
 
 
 def eval_model(args):
