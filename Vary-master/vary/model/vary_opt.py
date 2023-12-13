@@ -142,7 +142,7 @@ class varyOPTModel(OPTModel):
             else:
                 # image_features = self.mm_projector(image_features)
                 raise NotImplementedError
-            
+
             # dummy_image_features = torch.zeros(1024, 1664, device=inputs_embeds.device, dtype=inputs_embeds.dtype).permute(0, 2, 1).reshape(dummy_image_features.shape[0], -1, 32, 32)
             # VIT 1024; CNN:1024
             dummy_image_features = torch.zeros(256, 1024, device=inputs_embeds.device, dtype=inputs_embeds.dtype)
@@ -157,32 +157,31 @@ class varyOPTModel(OPTModel):
                     new_input_embeds.append(cur_input_embeds)
                     continue
 
-                if use_im_start_end:
-                    if (cur_input_ids == im_start_token).sum() != (cur_input_ids == im_end_token).sum():
-                        raise ValueError("The number of image start tokens and image end tokens should be the same.")
-                    
-                    image_start_tokens = torch.where(cur_input_ids == im_start_token)[0]
-                    for image_start_token_pos, per_cur_image_features in zip(image_start_tokens, cur_image_features):
-                        per_cur_image_features = per_cur_image_features.to(device=cur_input_embeds.device)
-                        num_patches = per_cur_image_features.shape[0]
-                        # print(cur_input_ids)
-                        if cur_input_ids[image_start_token_pos + num_patches + 1] != im_end_token:
-                            raise ValueError("The image end token should follow the image start token.")
-
-                        cur_input_embeds = torch.cat(
-                            (
-                                cur_input_embeds[:image_start_token_pos+1], 
-                                per_cur_image_features, 
-                                cur_input_embeds[image_start_token_pos + num_patches + 1:]
-                            ), 
-                            dim=0
-                        )
-
-
-                    new_input_embeds.append(cur_input_embeds)
-                else:
+                if not use_im_start_end:
                     raise NotImplementedError
 
+                if (cur_input_ids == im_start_token).sum() != (cur_input_ids == im_end_token).sum():
+                    raise ValueError("The number of image start tokens and image end tokens should be the same.")
+
+                image_start_tokens = torch.where(cur_input_ids == im_start_token)[0]
+                for image_start_token_pos, per_cur_image_features in zip(image_start_tokens, cur_image_features):
+                    per_cur_image_features = per_cur_image_features.to(device=cur_input_embeds.device)
+                    num_patches = per_cur_image_features.shape[0]
+                    # print(cur_input_ids)
+                    if cur_input_ids[image_start_token_pos + num_patches + 1] != im_end_token:
+                        raise ValueError("The image end token should follow the image start token.")
+
+                    cur_input_embeds = torch.cat(
+                        (
+                            cur_input_embeds[:image_start_token_pos+1], 
+                            per_cur_image_features, 
+                            cur_input_embeds[image_start_token_pos + num_patches + 1:]
+                        ), 
+                        dim=0
+                    )
+
+
+                new_input_embeds.append(cur_input_embeds)
             inputs_embeds = torch.stack(new_input_embeds, dim=0)
 
 

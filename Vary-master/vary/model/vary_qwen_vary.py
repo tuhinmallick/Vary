@@ -157,15 +157,13 @@ class varyQwenModel(QWenModel):
                 image_features_2.append(cnn_feature)
 
 
-            if type(images) is list:
-                image_features_1 = [self.mm_projector(image_feature) for image_feature in image_features_1]
-                image_features_2 = [self.mm_projector_vary(image_feature) for image_feature in image_features_2]
-                image_features = [torch.cat((image_feature[0], image_feature[1]), dim=-1) for image_feature in zip(image_features_1, image_features_2)]
-            else:
-
+            if type(images) is not list:
                 raise NotImplementedError
 
 
+            image_features_1 = [self.mm_projector(image_feature) for image_feature in image_features_1]
+            image_features_2 = [self.mm_projector_vary(image_feature) for image_feature in image_features_2]
+            image_features = [torch.cat((image_feature[0], image_feature[1]), dim=-1) for image_feature in zip(image_features_1, image_features_2)]
             # dummy_image_features = torch.zeros(256, 4096, device=inputs_embeds.device, dtype=inputs_embeds.dtype)
             dummy_image_features_1 = torch.zeros(256, 1024, device=inputs_embeds.device, dtype=inputs_embeds.dtype)
             dummy_image_features_2 = torch.zeros(256, 1024, device=inputs_embeds.device, dtype=inputs_embeds.dtype)
@@ -181,44 +179,43 @@ class varyQwenModel(QWenModel):
                     new_input_embeds.append(cur_input_embeds)
                     continue
 
-                if use_im_start_end:
-                    if (cur_input_ids == im_start_token).sum() != (cur_input_ids == im_end_token).sum():
-                        raise ValueError("The number of image start tokens and image end tokens should be the same.")
-                    
-                    image_start_tokens = torch.where(cur_input_ids == im_start_token)[0]
-                    for image_start_token_pos, per_cur_image_features in zip(image_start_tokens, cur_image_features):
-                        per_cur_image_features = per_cur_image_features.to(device=cur_input_embeds.device)
-                        num_patches = per_cur_image_features.shape[0]
-
-                        if cur_input_ids[image_start_token_pos + num_patches + 1] != im_end_token:
-                            raise ValueError("The image end token should follow the image start token.")
-                        
-                        # if orig_embeds_params is not None:
-                        #     cur_new_input_embeds = torch.cat(
-                        #         (
-                        #             cur_input_embeds[:image_start_token_pos].detach(), 
-                        #             cur_input_embeds[image_start_token_pos:image_start_token_pos+1], 
-                        #             per_cur_image_features, 
-                        #             cur_input_embeds[image_start_token_pos + num_patches + 1:image_start_token_pos + num_patches + 2], 
-                        #             cur_input_embeds[image_start_token_pos + num_patches + 2:].detach()
-                        #         ), 
-                        #         dim=0
-                        #     )
-                        # else:
-                        cur_input_embeds = torch.cat(
-                            (
-                                cur_input_embeds[:image_start_token_pos+1], 
-                                per_cur_image_features, 
-                                cur_input_embeds[image_start_token_pos + num_patches + 1:]
-                            ), 
-                            dim=0
-                        )
-
-
-                    new_input_embeds.append(cur_input_embeds)
-                else:
+                if not use_im_start_end:
                     raise NotImplementedError
 
+                if (cur_input_ids == im_start_token).sum() != (cur_input_ids == im_end_token).sum():
+                    raise ValueError("The number of image start tokens and image end tokens should be the same.")
+
+                image_start_tokens = torch.where(cur_input_ids == im_start_token)[0]
+                for image_start_token_pos, per_cur_image_features in zip(image_start_tokens, cur_image_features):
+                    per_cur_image_features = per_cur_image_features.to(device=cur_input_embeds.device)
+                    num_patches = per_cur_image_features.shape[0]
+
+                    if cur_input_ids[image_start_token_pos + num_patches + 1] != im_end_token:
+                        raise ValueError("The image end token should follow the image start token.")
+
+                    # if orig_embeds_params is not None:
+                    #     cur_new_input_embeds = torch.cat(
+                    #         (
+                    #             cur_input_embeds[:image_start_token_pos].detach(), 
+                    #             cur_input_embeds[image_start_token_pos:image_start_token_pos+1], 
+                    #             per_cur_image_features, 
+                    #             cur_input_embeds[image_start_token_pos + num_patches + 1:image_start_token_pos + num_patches + 2], 
+                    #             cur_input_embeds[image_start_token_pos + num_patches + 2:].detach()
+                    #         ), 
+                    #         dim=0
+                    #     )
+                    # else:
+                    cur_input_embeds = torch.cat(
+                        (
+                            cur_input_embeds[:image_start_token_pos+1], 
+                            per_cur_image_features, 
+                            cur_input_embeds[image_start_token_pos + num_patches + 1:]
+                        ), 
+                        dim=0
+                    )
+
+
+                new_input_embeds.append(cur_input_embeds)
             inputs_embeds = torch.stack(new_input_embeds, dim=0)
 
         return super(varyQwenModel, self).forward(
@@ -266,7 +263,7 @@ class varyQwenForCausalLM(QWenLMHeadModel):
         output_hidden_states: Optional[bool] = None,
         images: Optional[torch.FloatTensor] = None,
         return_dict: Optional[bool] = None,
-        
+
     ) -> Union[Tuple, CausalLMOutputWithPast]:
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -287,7 +284,7 @@ class varyQwenForCausalLM(QWenLMHeadModel):
             output_hidden_states=output_hidden_states,
             images=images,
             return_dict=return_dict
-            
+
         )
 
 
@@ -306,12 +303,6 @@ class varyQwenForCausalLM(QWenLMHeadModel):
             loss = loss_fct(
                 shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
             )
-
-        if not return_dict:
-            output = (lm_logits,) + transformer_outputs[1:]
-            return ((loss,) + output) if loss is not None else output
-        
-        # print(loss)
 
         if not return_dict:
             output = (lm_logits,) + transformer_outputs[1:]

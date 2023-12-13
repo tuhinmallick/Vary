@@ -157,15 +157,16 @@ class QWenTokenizer(PreTrainedTokenizer):
         Returns:
             `List[bytes|str]`: The list of tokens.
         """
-        tokens = []
         text = unicodedata.normalize("NFC", text)
 
-        # this implementation takes a detour: text -> token id -> token surface forms
-        for t in self.tokenizer.encode(
-            text, allowed_special=allowed_special, disallowed_special=disallowed_special
-        ):
-            tokens.append(self.decoder[t])
-        return tokens
+        return [
+            self.decoder[t]
+            for t in self.tokenizer.encode(
+                text,
+                allowed_special=allowed_special,
+                disallowed_special=disallowed_special,
+            )
+        ]
 
     def convert_tokens_to_string(self, tokens: List[Union[bytes, str]]) -> str:
         """

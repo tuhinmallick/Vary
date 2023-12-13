@@ -25,19 +25,18 @@ class DataCollatorForSupervisedDataset(object):
             input_ids,
             batch_first=True,
             padding_value=self.tokenizer.pad_token_id)
-            
+
         labels = torch.nn.utils.rnn.pad_sequence(
             labels,
             batch_first=True,
             padding_value=IGNORE_INDEX)
-        
-        batch = dict(
+
+        return dict(
             input_ids=input_ids,
             labels=labels,
             attention_mask=input_ids.ne(self.tokenizer.pad_token_id),
             images=images,
         )
-        return batch
 
 
 def make_supervised_data_module(interleave, with_box, tokenizer, data_args):
